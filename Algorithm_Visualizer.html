@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Algorithm Visualizer</title>
+<style>
+:root{
+  color-scheme: dark;
+  --bg:#0a0a0a; --panel:#121212; --panel2:#181818; --line:#262626;
+  --text:#e8e8e6; --muted:#8a8a86;
+  --amber:#ffb454; --green:#5fd98a; --red:#ff6b6b; --blue:#63b3ff;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:var(--mono);
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.wrap{max-width:1100px; margin:0 auto; padding:32px 20px 48px;}
+header{margin-bottom:28px;}
+h1{font-size:1.4rem; font-weight:600; letter-spacing:0.2px; margin:0 0 6px;}
+.sub{color:var(--muted); font-size:0.85rem; line-height:1.5; max-width:60ch;}
+
+.layout{display:grid; grid-template-columns:220px 1fr; gap:20px;}
+@media (max-width:720px){ .layout{grid-template-columns:1fr;} }
+
+.algo-list{display:flex; flex-direction:column; gap:6px;}
+.algo-btn{
+  background:var(--panel); border:1px solid var(--line); color:var(--text);
+  padding:11px 14px; border-radius:6px; text-align:left; cursor:pointer;
+  font-family:var(--mono); font-size:0.85rem; transition:border-color .15s, background .15s;
+}
+.algo-btn:hover{border-color:#3a3a3a;}
+.algo-btn.active{border-color:var(--amber); background:#1a1611; color:var(--amber);}
+.algo-btn .desc{display:block; color:var(--muted); font-size:0.72rem; margin-top:2px;}
+.algo-btn.active .desc{color:#b98a4a;}
+
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:20px;}
+.stage{min-height:340px; display:flex; align-items:flex-end; justify-content:center; padding:16px 4px;}
+
+.controls{display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;}
+.ctrl-btn{
+  background:var(--panel2); border:1px solid var(--line); color:var(--text);
+  width:42px; height:42px; border-radius:6px; cursor:pointer; font-size:1rem;
+  display:flex; align-items:center; justify-content:center; transition:border-color .15s;
+}
+.ctrl-btn:hover{border-color:#3a3a3a;}
+.ctrl-btn:disabled{opacity:.35; cursor:not-allowed;}
+.ctrl-btn.play{border-color:var(--green); color:var(--green);}
+.speed-wrap{display:flex; align-items:center; gap:8px; margin-left:auto; color:var(--muted); font-size:0.78rem;}
+input[type=range]{accent-color:var(--amber); width:110px;}
+
+.target-wrap{display:flex; align-items:center; gap:8px; margin-top:14px; font-size:0.8rem; color:var(--muted);}
+.target-wrap input{
+  background:var(--panel2); border:1px solid var(--line); color:var(--text);
+  font-family:var(--mono); font-size:0.85rem; padding:8px 10px; border-radius:6px; width:90px;
+}
+.target-wrap input:focus{outline:none; border-color:var(--amber);}
+.target-wrap select{
+  background:var(--panel2); border:1px solid var(--line); color:var(--text);
+  font-family:var(--mono); font-size:0.85rem; padding:8px 28px 8px 10px; border-radius:6px;
+  cursor:pointer; appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0 L5 6 L10 0 Z' fill='%238a8a86'/></svg>");
+  background-repeat:no-repeat; background-position:right 10px center;
+}
+.target-wrap select:focus{outline:none; border-color:var(--amber);}
+.target-wrap select option{background:var(--panel2); color:var(--text);}
+.target-wrap button{
+  background:var(--panel2); border:1px solid var(--line); color:var(--amber);
+  font-family:var(--mono); font-size:0.8rem; padding:8px 14px; border-radius:6px; cursor:pointer;
+  transition:border-color .15s;
+}
+.target-wrap button:hover{border-color:var(--amber);}
+.target-wrap .range{color:#5c5c58; font-size:0.72rem;}
+
+.meta{display:flex; gap:22px; margin-top:14px; flex-wrap:wrap; font-size:0.76rem; color:var(--muted);}
+.meta b{color:var(--text); font-weight:600;}
+.note{margin-top:8px; font-size:0.74rem; color:#6b6b67; font-style:italic;}
+.status{margin-top:10px; font-size:0.8rem; color:var(--blue); min-height:18px;}
+
+/* bars */
+.bars-wrap{position:relative; height:280px; margin:0 auto;}
+.bar{
+  position:absolute; left:0; bottom:0; width:28px; background:#333; border-radius:3px 3px 0 0;
+  transition:transform .35s cubic-bezier(.4,0,.2,1), height .3s ease, background .2s ease;
+  will-change:transform;
+}
+.bar span{position:absolute; bottom:-20px; left:0; right:0; text-align:center; font-size:0.65rem; color:var(--muted);}
+.bar.compare{background:var(--amber);}
+.bar.swap{background:var(--red);}
+.bar.done{background:var(--green);}
+
+/* merge sort: leveled bar tree + curved connectors */
+.merge-wrap{display:block; width:100%;}
+.mtree{position:relative; margin:0 auto 4px;}
+.mrow{position:absolute; left:0; width:100%; opacity:0; transition:opacity .45s ease;}
+.mrow.shown{opacity:1;}
+.mband{
+  position:absolute; bottom:0; border:1.5px solid #2c2c2c; border-radius:6px;
+  background:rgba(255,255,255,0.015);
+  transition:border-color .2s ease, background .2s ease;
+}
+.mband.active{border-color:var(--amber); background:rgba(255,180,84,0.07);}
+.mband.sorted{border-color:var(--green); background:rgba(95,217,138,0.07);}
+.mbar{
+  position:absolute; bottom:0; background:#3a3a3a; border-radius:3px 3px 0 0;
+  transition:transform .35s cubic-bezier(.4,0,.2,1), height .3s ease, background .2s ease;
+}
+.mbar span{position:absolute; bottom:-16px; left:0; right:0; text-align:center; font-size:0.58rem; color:var(--muted);}
+.mbar.compare{background:var(--amber);}
+.mbar.swap{background:var(--red);}
+.mbar.done{background:var(--green);}
+
+/* curved connectors linking each split to its two children */
+.tree-lines{position:absolute; top:0; left:0; width:100%; height:100%; overflow:visible; pointer-events:none; z-index:0;}
+.tree-link{fill:none; stroke:#333; stroke-width:1.5px; opacity:0; transition:opacity .4s ease, stroke .25s ease, stroke-width .25s ease;}
+.tree-link.shown{opacity:1;}
+.tree-link.active{stroke:var(--amber); stroke-width:2px;}
+.tree-link.sorted{stroke:var(--green);}
+.merge-info{text-align:center; font-size:0.78rem; color:var(--muted); min-height:18px;}
+
+/* array row for binary search */
+.arow{display:flex; gap:6px; flex-wrap:wrap; justify-content:center;}
+.cell{width:44px; height:44px; border:1px solid var(--line); border-radius:6px; display:flex; align-items:center; justify-content:center; position:relative; font-size:0.85rem; background:#161616;}
+.ptr-marker{position:absolute; bottom:100%; left:50%; display:flex; flex-direction:column; align-items:center; pointer-events:none;}
+.ptr-label{font-size:0.6rem; font-weight:700; letter-spacing:0.3px; white-space:nowrap; margin-bottom:2px;}
+.ptr-arrow-line{width:2px; height:38px; background:currentColor; display:block; position:relative;}
+.ptr-arrow-line::after{content:''; position:absolute; left:50%; bottom:-1px; transform:translateX(-50%); width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:7px solid currentColor;}
+.ptr-marker.ptr-lo{color:var(--blue);}
+.ptr-marker.ptr-mid{color:var(--amber);}
+.ptr-marker.ptr-hi{color:var(--red);}
+.cell.mid{border-color:var(--amber); color:var(--amber);}
+.cell.found{border-color:var(--green); background:#0f1f14; color:var(--green);}
+.cell.excluded{opacity:.25;}
+.pointer-row{display:flex; gap:22px; justify-content:center; margin-bottom:18px; font-size:0.78rem;}
+.pointer-row .p{color:var(--muted);}
+.pointer-row .p b{font-weight:600;}
+.pointer-row .lo b{color:var(--blue);}
+.pointer-row .mid b{color:var(--amber);}
+.pointer-row .hi b{color:var(--red);}
+.pointer-row .dim{opacity:.35;}
+.merge-pointers{display:flex; gap:26px; justify-content:center; font-size:0.8rem;}
+.merge-pointers .p{color:var(--muted);}
+.merge-pointers .p b{font-weight:600;}
+.merge-pointers .lo b{color:var(--blue);}
+.merge-pointers .mid b{color:var(--amber);}
+.merge-pointers .hi b{color:var(--red);}
+.merge-pointers .dim{opacity:.35;}
+
+/* graph */
+svg{width:100%; height:300px;}
+.node{fill:#181818; stroke:#333; stroke-width:1.5px; transition:fill .2s, stroke .2s;}
+.node.visited{fill:#12210f; stroke:var(--green);}
+.node.current{fill:#241a08; stroke:var(--amber);}
+.node.queued{fill:#0f1a24; stroke:var(--blue);}
+.node-label{fill:var(--text); font-size:12px; font-family:var(--mono); text-anchor:middle; dominant-baseline:middle;}
+.edge{stroke:#333; stroke-width:1.5px;}
+.edge.active{stroke:var(--amber); stroke-width:2.5px;}
+
+footer{margin-top:28px; color:var(--muted); font-size:0.72rem;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Algorithm Visualizer</h1>
+    <div class="sub">Step through how five core algorithms actually execute — comparisons, swaps, and traversal order, one step at a time.</div>
+  </header>
+
+  <div class="layout">
+    <div class="algo-list" id="algoList"></div>
+
+    <div class="panel">
+      <div class="stage" id="stage"></div>
+      <div class="controls">
+        <button class="ctrl-btn play" id="playBtn" title="Play">&#9654;</button>
+        <button class="ctrl-btn" id="pauseBtn" title="Pause">&#10074;&#10074;</button>
+        <button class="ctrl-btn" id="resetBtn" title="Reset">&#8635;</button>
+        <div class="speed-wrap">
+          speed
+          <input type="range" id="speed" min="1" max="10" value="5">
+        </div>
+      </div>
+      <div class="target-wrap" id="customWrap" style="display:none;">
+        <label for="customCount">count:</label>
+        <input type="number" id="customCount" min="2" max="15" placeholder="n" style="width:52px;">
+        <label for="customValues">values:</label>
+        <input type="text" id="customValues" placeholder="e.g. 5,3,9 or 5 3 9" style="width:150px;">
+        <button id="customBtn">Use array</button>
+      </div>
+      <div class="target-wrap" id="targetWrap" style="display:none;">
+        <label for="targetInput">find:</label>
+        <input type="number" id="targetInput" placeholder="value">
+        <button id="targetBtn">Search</button>
+        <span class="range" id="rangeHint"></span>
+      </div>
+      <div class="target-wrap" id="startWrap" style="display:none;">
+        <label for="startNodeSelect">start node:</label>
+        <select id="startNodeSelect"></select>
+        <button id="startBtn">Run</button>
+        <button id="randomGraphBtn">New graph</button>
+      </div>
+      <div class="status" id="status">Select an algorithm and press play.</div>
+      <div class="meta" id="meta"></div>
+      <div class="note" id="note"></div>
+    </div>
+  </div>
+  <footer>Bars/cells: amber = comparing, red = swap or high bound, green = done or visited, blue = low bound or queued.</footer>
+</div>
+
+<script>
+const ALGOS = [
+  {id:'bubble', name:'Bubble Sort', desc:'Sorting'},
+  {id:'merge', name:'Merge Sort', desc:'Sorting'},
+  {id:'binary', name:'Binary Search', desc:'Searching'},
+  {id:'bfs', name:'Breadth-First Search', desc:'Graph'},
+  {id:'dfs', name:'Depth-First Search', desc:'Graph'}
+];
+
+const COMPLEXITY = {
+  bubble:{best:'O(n)', avg:'O(n²)', worst:'O(n²)', space:'O(1)',
+    note:'In-place and stable. Best case assumes an early-exit optimization (stop when a full pass makes no swaps) — this run uses that optimization.'},
+  merge:{best:'O(n log n)', avg:'O(n log n)', worst:'O(n log n)', space:'O(n)',
+    note:'Shown in two stages: dividing down to single elements, then merging pairs back together in sorted order. Stable, but not in-place — needs an auxiliary array the size of the input.'},
+  binary:{best:'O(1)', avg:'O(log n)', worst:'O(log n)', space:'O(1)',
+    note:'Requires the array to already be sorted. Space is O(1) for the iterative form shown here (O(log n) if implemented recursively, due to the call stack).'},
+  bfs:{best:'O(V + E)', avg:'O(V + E)', worst:'O(V + E)', space:'O(V)',
+    note:'Explores level by level using a queue. Finds the shortest path by edge count in an unweighted graph.'},
+  dfs:{best:'O(V + E)', avg:'O(V + E)', worst:'O(V + E)', space:'O(V)',
+    note:'Explores as deep as possible before backtracking. Space is the recursion stack plus the visited set.'}
+};
+
+let current = 'bubble';
+let steps = [];
+let stepIdx = 0;
+let timer = null;
+let playing = false;
+let barNodes = {};
+let mergeTreeRows = [];
+let mergeRowEls = [];
+let mergeBandEls = [];
+let mergeLineEls = [];
+let mergeBarNodes = [];
+let binaryArray = null;
+let customArr = null;
+let customBinaryActive = false;
+
+const stage = document.getElementById('stage');
+const statusEl = document.getElementById('status');
+const metaEl = document.getElementById('meta');
+const noteEl = document.getElementById('note');
+const speedEl = document.getElementById('speed');
+const algoListEl = document.getElementById('algoList');
+const targetWrap = document.getElementById('targetWrap');
+const targetInput = document.getElementById('targetInput');
+const rangeHint = document.getElementById('rangeHint');
+const customWrap = document.getElementById('customWrap');
+const customCount = document.getElementById('customCount');
+const customValues = document.getElementById('customValues');
+const customBtn = document.getElementById('customBtn');
+const startWrap = document.getElementById('startWrap');
+const startNodeSelect = document.getElementById('startNodeSelect');
+const startBtn = document.getElementById('startBtn');
+const randomGraphBtn = document.getElementById('randomGraphBtn');
+let startNode = 0;
+
+function renderAlgoList(){
+  algoListEl.innerHTML = ALGOS.map(a =>
+    `<button class="algo-btn ${a.id===current?'active':''}" data-id="${a.id}">${a.name}<span class="desc">${a.desc}</span></button>`
+  ).join('');
+  algoListEl.querySelectorAll('.algo-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ selectAlgo(btn.dataset.id); });
+  });
+}
+
+function selectAlgo(id){
+  pause();
+  current = id;
+  renderAlgoList();
+  const c = COMPLEXITY[id];
+  metaEl.innerHTML = `<div>best: <b>${c.best}</b></div><div>average: <b>${c.avg}</b></div><div>worst: <b>${c.worst}</b></div><div>space: <b>${c.space}</b></div>`;
+  noteEl.textContent = c.note;
+  barNodes = {};
+  targetWrap.style.display = id==='binary' ? 'flex' : 'none';
+  customWrap.style.display = (id==='bubble'||id==='merge'||id==='binary') ? 'flex' : 'none';
+  startWrap.style.display = (id==='bfs'||id==='dfs') ? 'flex' : 'none';
+  customArr = null; customBinaryActive = false;
+  customCount.value = ''; customValues.value = '';
+  if(id==='binary') binaryArray = null;
+  if(id==='bfs'||id==='dfs'){
+    startNode = 0;
+    refreshStartSelect();
+  }
+  buildSteps();
+  stepIdx = 0;
+  render();
+  if(id==='binary') updateRangeHint();
+}
+
+function updateRangeHint(){
+  if(!binaryArray) return;
+  rangeHint.textContent = `array: ${binaryArray.join(', ')}`;
+}
+
+// ---------- STEP BUILDERS ----------
+function makeArr(n=10, max=90){
+  return Array.from({length:n}, (_, i) => ({id:i, value: 8 + Math.floor(Math.random()*max)}));
+}
+function arrFromCustom(values){
+  return values.map((v,i) => ({id:i, value:v}));
+}
+
+function buildBubbleSteps(){
+  const arr = customArr ? arrFromCustom(customArr) : makeArr();
+  const s = [];
+  const snap = (compare=[], swap=[], done=[]) => s.push({arr: arr.slice(), compare, swap, done});
+  snap();
+  const done = [];
+  for(let i=0;i<arr.length;i++){
+    let swapped = false;
+    for(let j=0;j<arr.length-i-1;j++){
+      snap([j,j+1], [], [...done]);
+      if(arr[j].value > arr[j+1].value){
+        [arr[j],arr[j+1]] = [arr[j+1],arr[j]];
+        swapped = true;
+        snap([], [j,j+1], [...done]);
+      }
+    }
+    done.push(arr.length-i-1);
+    if(!swapped){
+      for(let k=0;k<arr.length-i-1;k++) done.push(k);
+      break;
+    }
+  }
+  snap([], [], arr.map((_,i)=>i));
+  return s;
+}
+
+function buildMergeSteps(){
+  const arr = customArr ? arrFromCustom(customArr) : makeArr();
+  const work = arr.slice();
+  const n = work.length;
+  const s = [];
+
+  const treeRows = [];
+  (function computeTree(lo,hi,depth){
+    if(!treeRows[depth]) treeRows[depth] = [];
+    treeRows[depth].push({lo,hi});
+    if(hi-lo<=1) return;
+    const mid = (lo+hi)>>1;
+    computeTree(lo,mid,depth+1);
+    computeTree(mid,hi,depth+1);
+  })(0, n, 0);
+  const maxDepth = treeRows.length;
+
+  for(let r=1;r<=maxDepth;r++){
+    s.push({phase:'divide', rowsShown:r, arr: work.slice(), compare:[], swap:[], done:[], depth:null, lo:null, mid:null, hi:null, k:null});
+  }
+
+  function mergeSort(lo,hi,depth){
+    if(hi-lo<=1) return;
+    const mid = (lo+hi)>>1;
+    mergeSort(lo,mid,depth+1); mergeSort(mid,hi,depth+1);
+    const left = work.slice(lo,mid), right = work.slice(mid,hi);
+    let i=0, j=0;
+    const merged = [];
+
+    // Full-array snapshot for "right now": everything outside [lo,hi) is
+    // untouched, the already-decided prefix sits at the front, and the two
+    // still-undecided remainders fill out the rest. Building it this way
+    // (instead of writing straight into `work` as we go) means every bar
+    // keeps a single, correct position at every step, so it glides into
+    // place instead of jumping or briefly duplicating another bar.
+    const snapshot = () => work.slice(0,lo).concat(merged, left.slice(i), right.slice(j), work.slice(hi));
+
+    while(i<left.length && j<right.length){
+      const posLeft = lo + merged.length;
+      const posRight = posLeft + (left.length - i);
+      s.push({phase:'merge', rowsShown:maxDepth, arr: snapshot(), compare:[posLeft,posRight], swap:[], done:[], depth, lo, mid, hi, k: posLeft});
+      if(left[i].value <= right[j].value){ merged.push(left[i]); i++; } else { merged.push(right[j]); j++; }
+      s.push({phase:'merge', rowsShown:maxDepth, arr: snapshot(), compare:[], swap:[lo+merged.length-1], done:[], depth, lo, mid, hi, k: lo+merged.length-1});
+    }
+    while(i<left.length){
+      merged.push(left[i]); i++;
+      s.push({phase:'merge', rowsShown:maxDepth, arr: snapshot(), compare:[], swap:[lo+merged.length-1], done:[], depth, lo, mid, hi, k: lo+merged.length-1});
+    }
+    while(j<right.length){
+      merged.push(right[j]); j++;
+      s.push({phase:'merge', rowsShown:maxDepth, arr: snapshot(), compare:[], swap:[lo+merged.length-1], done:[], depth, lo, mid, hi, k: lo+merged.length-1});
+    }
+    for(let x=0;x<merged.length;x++) work[lo+x] = merged[x];
+  }
+  mergeSort(0, n, 0);
+  s.push({phase:'done', rowsShown:maxDepth, arr: work.slice(), compare:[], swap:[], done: work.map((_,i)=>i), depth:null, lo:null, mid:null, hi:null, k:null});
+  s.treeRows = treeRows;
+  return s;
+}
+
+function buildBinarySteps(customTarget){
+  if(!binaryArray){
+    binaryArray = Array.from({length:11}, ()=> 8+Math.floor(Math.random()*90)).sort((a,b)=>a-b);
+  }
+  const arr = binaryArray;
+  const target = (customTarget !== undefined && customTarget !== null && !isNaN(customTarget))
+    ? customTarget
+    : arr[Math.floor(Math.random()*arr.length)];
+  const s = [];
+  let lo=0, hi=arr.length-1;
+  s.push({arr, lo, hi, mid:-1, target, found:-1});
+  while(lo<=hi){
+    const mid = Math.floor((lo+hi)/2);
+    s.push({arr, lo, hi, mid, target, found:-1});
+    if(arr[mid]===target){ s.push({arr, lo, hi, mid, target, found:mid}); break; }
+    else if(arr[mid]<target) lo = mid+1;
+    else hi = mid-1;
+  }
+  if(lo>hi && !s.some(st=>st.found>=0)){
+    s.push({arr, lo, hi, mid:-1, target, found:-1});
+  }
+  return s;
+}
+
+let GRAPH_NODES = [
+  {id:0,label:0,x:80,y:60},{id:1,label:1,x:220,y:40},{id:2,label:2,x:220,y:130},{id:3,label:3,x:360,y:60},
+  {id:4,label:4,x:80,y:200},{id:5,label:5,x:220,y:230},{id:6,label:6,x:360,y:200},{id:7,label:7,x:480,y:130}
+];
+let GRAPH_EDGES = [[0,1],[0,2],[1,3],[2,5],[2,4],[3,7],[5,6],[6,7]];
+
+// Builds a fresh random graph: a random node count (so the size varies each
+// time), distinct random two-digit labels, laid out on an ellipse, connected
+// by a random spanning tree plus a few extra edges for variety.
+function generateRandomGraph(){
+  const n = 5 + Math.floor(Math.random()*6); // 5..10 nodes
+  const pool = Array.from({length:90}, (_,i)=> i+10); // 10..99, all distinct
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  const labels = pool.slice(0, n);
+
+  const cx=280, cy=140, rx=220, ry=100;
+  const nodes = labels.map((label,i)=>{
+    const angle = (2*Math.PI*i)/n - Math.PI/2;
+    return {id:i, label, x: Math.round(cx + rx*Math.cos(angle)), y: Math.round(cy + ry*Math.sin(angle))};
+  });
+
+  const edges = [];
+  for(let i=1;i<n;i++){
+    const j = Math.floor(Math.random()*i);
+    edges.push([i,j]);
+  }
+  const extra = Math.max(1, Math.floor(n/2));
+  let added=0, attempts=0;
+  while(added<extra && attempts<50){
+    attempts++;
+    const a = Math.floor(Math.random()*n), b = Math.floor(Math.random()*n);
+    if(a===b) continue;
+    if(edges.some(([x,y])=> (x===a&&y===b)||(x===b&&y===a))) continue;
+    edges.push([a,b]);
+    added++;
+  }
+
+  GRAPH_NODES = nodes;
+  GRAPH_EDGES = edges;
+}
+
+function refreshStartSelect(){
+  startNodeSelect.innerHTML = GRAPH_NODES.map(n=>`<option value="${n.id}">${n.label}</option>`).join('');
+  startNodeSelect.value = String(startNode);
+}
+
+function adjacency(){
+  const adj = {}; GRAPH_NODES.forEach(n=>adj[n.id]=[]);
+  GRAPH_EDGES.forEach(([a,b])=>{ adj[a].push(b); adj[b].push(a); });
+  Object.values(adj).forEach(l=>l.sort((a,b)=>a-b));
+  return adj;
+}
+
+function buildBfsSteps(start=0){
+  const adj = adjacency();
+  const lbl = id => GRAPH_NODES[id].label;
+  const s = []; const visited = new Set(); const queue = [start]; visited.add(start);
+  s.push({visited:[...visited], current:-1, queue:[...queue], edge:null,
+    caption:`Start: node ${lbl(start)} is added to the queue.`});
+  while(queue.length){
+    const cur = queue.shift();
+    s.push({visited:[...visited], current:cur, queue:[...queue], edge:null,
+      caption:`Dequeue node ${lbl(cur)} — visit it now.`});
+    for(const nb of adj[cur]){
+      if(!visited.has(nb)){
+        visited.add(nb); queue.push(nb);
+        s.push({visited:[...visited], current:cur, queue:[...queue], edge:[cur,nb],
+          caption:`Node ${lbl(cur)} sees neighbor ${lbl(nb)} — not visited yet, so add it to the queue.`});
+      }
+    }
+  }
+  s.push({visited:[...visited], current:-1, queue:[], edge:null,
+    caption: visited.size < GRAPH_NODES.length
+      ? `Queue is empty — every node reachable from ${lbl(start)} has been visited, level by level.`
+      : 'Queue is empty — every node has been visited, level by level.'});
+  return s;
+}
+
+function buildDfsSteps(start=0){
+  const adj = adjacency();
+  const lbl = id => GRAPH_NODES[id].label;
+  const s = []; const visited = new Set();
+  s.push({visited:[...visited], current:-1, edge:null,
+    caption:`Start: begin a walk from node ${lbl(start)}.`});
+  function dfs(u){
+    visited.add(u);
+    s.push({visited:[...visited], current:u, edge:null,
+      caption:`Visit node ${lbl(u)} — go as deep as possible from here.`});
+    for(const v of adj[u]){
+      if(!visited.has(v)){
+        s.push({visited:[...visited], current:u, edge:[u,v],
+          caption:`Node ${lbl(u)} steps forward to unvisited neighbor ${lbl(v)}.`});
+        dfs(v);
+      }
+    }
+    s.push({visited:[...visited], current:u, edge:null,
+      caption:`No unvisited neighbors left at node ${lbl(u)} — backtrack.`});
+  }
+  dfs(start);
+  s.push({visited:[...visited], current:-1, edge:null,
+    caption: visited.size < GRAPH_NODES.length
+      ? `Done — every node reachable from ${lbl(start)} has been visited, one deep path at a time.`
+      : 'Done — every node has been visited, one deep path at a time.'});
+  return s;
+}
+
+
+function buildSteps(){
+  if(current==='bubble') steps = buildBubbleSteps();
+  else if(current==='merge'){ steps = buildMergeSteps(); mergeTreeRows = steps.treeRows || []; }
+  else if(current==='binary') steps = buildBinarySteps();
+  else if(current==='bfs') steps = buildBfsSteps(startNode);
+  else steps = buildDfsSteps(startNode);
+}
+
+// ---------- RENDER ----------
+function render(){
+  const st = steps[stepIdx];
+  if(current==='bubble') renderBars(st, stepIdx===0);
+  else if(current==='merge') renderMerge(st, stepIdx===0);
+  else if(current==='binary') renderBinary(st);
+  else renderGraph(st);
+  statusEl.textContent = `Step ${stepIdx} / ${steps.length-1}`;
+  document.getElementById('playBtn').disabled = stepIdx>=steps.length-1;
+}
+
+const BAR_W = 28, BAR_GAP = 8;
+const M_ROW_H = 130, M_ROW_GAP = 60, M_BAR_MAX = 90, M_BAR_GAP = 20;
+
+function initBars(initialArr){
+  stage.innerHTML = `<div class="bars-wrap" id="barsWrap" style="width:${initialArr.length*(BAR_W+BAR_GAP)-BAR_GAP}px"></div>`;
+  const wrap = document.getElementById('barsWrap');
+  barNodes = {};
+  const max = Math.max(...initialArr.map(o=>o.value));
+  initialArr.forEach((obj,i)=>{
+    const el = document.createElement('div');
+    el.className = 'bar';
+    el.style.transform = `translateX(${i*(BAR_W+BAR_GAP)}px)`;
+    el.style.height = (obj.value/max*240)+'px';
+    el.innerHTML = `<span>${obj.value}</span>`;
+    wrap.appendChild(el);
+    barNodes[obj.id] = el;
+  });
+}
+
+function renderBars(st, forceInit){
+  if(forceInit || !document.getElementById('barsWrap')) initBars(st.arr);
+  const max = Math.max(...st.arr.map(o=>o.value));
+  st.arr.forEach((obj,i)=>{
+    const el = barNodes[obj.id];
+    if(!el) return;
+    el.style.transform = `translateX(${i*(BAR_W+BAR_GAP)}px)`;
+    el.style.height = (obj.value/max*240)+'px';
+    let cls = 'bar';
+    if(st.done && st.done.includes(i)) cls += ' done';
+    if(st.compare && st.compare.includes(i)) cls += ' compare';
+    if(st.swap && st.swap.includes(i)) cls += ' swap';
+    el.className = cls;
+  });
+}
+
+function initMergeView(arr){
+  const step = BAR_W + M_BAR_GAP;
+  const width = arr.length*step - M_BAR_GAP;
+  const rowBlock = M_ROW_H + M_ROW_GAP;
+  const totalHeight = mergeTreeRows.length*rowBlock - M_ROW_GAP;
+
+  // one curved path per parent-group -> child-group connection
+  let linesSVG = '';
+  mergeTreeRows.forEach((row,d)=>{
+    if(d+1>=mergeTreeRows.length) return;
+    row.forEach(g=>{
+      if(g.hi-g.lo<=1) return;
+      const mid = (g.lo+g.hi)>>1;
+      const pW = (g.hi-g.lo)*step - M_BAR_GAP;
+      const pX = g.lo*step + pW/2;
+      const pY = d*rowBlock + M_ROW_H;
+      [[g.lo,mid],[mid,g.hi]].forEach(([clo,chi])=>{
+        const cW = (chi-clo)*step - M_BAR_GAP;
+        const cX = clo*step + cW/2;
+        const cY = (d+1)*rowBlock;
+        const mY = (pY+cY)/2;
+        linesSVG += `<path class="tree-link" data-depth="${d}" data-lo="${g.lo}" data-hi="${g.hi}" d="M ${pX} ${pY} C ${pX} ${mY}, ${cX} ${mY}, ${cX} ${cY}"></path>`;
+      });
+    });
+  });
+
+  // each level is a full-width row holding group "bands" (the split boundary)
+  // plus the actual value bars for that level — the same live array, just
+  // grouped differently per depth, so there's only ever one representation.
+  const rowsHTML = mergeTreeRows.map((row,d)=>{
+    const bands = row.map(g=>{
+      const x = g.lo*step;
+      const w = (g.hi-g.lo)*step - M_BAR_GAP;
+      return `<div class="mband" data-lo="${g.lo}" data-hi="${g.hi}" style="left:${x}px;width:${w}px;height:${M_ROW_H}px;"></div>`;
+    }).join('');
+    return `<div class="mrow" data-depth="${d}" style="top:${d*rowBlock}px;height:${M_ROW_H}px;">${bands}</div>`;
+  }).join('');
+
+  stage.innerHTML = `
+    <div class="merge-wrap">
+      <div class="mtree" id="mtreeWrap" style="width:${width}px;height:${totalHeight}px;">
+        <svg class="tree-lines" viewBox="0 0 ${width} ${totalHeight}">${linesSVG}</svg>
+        ${rowsHTML}
+      </div>
+      <div class="merge-pointers" id="mergePointers" style="width:${width}px;margin:14px auto 0;"></div>
+      <div class="merge-info" id="mergeInfo" style="width:${width}px;margin:6px auto 0;"></div>
+    </div>`;
+
+  mergeRowEls = mergeTreeRows.map((row,d)=> document.querySelector(`.mrow[data-depth="${d}"]`));
+  mergeBandEls = mergeTreeRows.map((row,d)=> Array.from(document.querySelectorAll(`.mrow[data-depth="${d}"] .mband`)));
+  mergeLineEls = Array.from(document.querySelectorAll('.tree-link'));
+
+  const max = Math.max(...arr.map(o=>o.value));
+  mergeBarNodes = mergeRowEls.map(rowEl=>{
+    const map = {};
+    arr.forEach((obj,i)=>{
+      const el = document.createElement('div');
+      el.className = 'mbar';
+      el.style.width = BAR_W+'px';
+      el.style.transform = `translateX(${i*step}px)`;
+      el.style.height = (obj.value/max*M_BAR_MAX)+'px';
+      el.innerHTML = `<span>${obj.value}</span>`;
+      rowEl.appendChild(el);
+      map[obj.id] = el;
+    });
+    return map;
+  });
+}
+
+function renderMerge(st, forceInit){
+  if(forceInit || !document.getElementById('mtreeWrap')) initMergeView(st.arr);
+
+  const step = BAR_W + M_BAR_GAP;
+  const max = Math.max(...st.arr.map(o=>o.value));
+  mergeBarNodes.forEach((map, d)=>{
+    st.arr.forEach((obj,i)=>{
+      const el = map[obj.id];
+      if(!el) return;
+      el.style.transform = `translateX(${i*step}px)`;
+      el.style.height = (obj.value/max*M_BAR_MAX)+'px';
+      let cls = 'mbar';
+      if(st.done && st.done.includes(i)) cls += ' done';
+      if(d===st.depth){
+        if(st.compare && st.compare.includes(i)) cls += ' compare';
+        if(st.swap && st.swap.includes(i)) cls += ' swap';
+      }
+      el.className = cls;
+    });
+  });
+
+  mergeRowEls.forEach((rowEl,d)=>{
+    const shown = st.phase!=='divide' || d < st.rowsShown;
+    rowEl.className = 'mrow' + (shown ? ' shown' : '');
+  });
+
+  mergeBandEls.forEach((bandList,d)=>{
+    bandList.forEach(el=>{
+      const lo = +el.dataset.lo, hi = +el.dataset.hi;
+      let cls = 'mband';
+      if(st.phase==='merge' && d===st.depth && lo===st.lo && hi===st.hi) cls += ' active';
+      if(st.phase==='done') cls += ' sorted';
+      el.className = cls;
+    });
+  });
+
+  mergeLineEls.forEach(el=>{
+    const d = +el.dataset.depth, lo = +el.dataset.lo, hi = +el.dataset.hi;
+    const shown = st.phase!=='divide' || (d+1) < st.rowsShown;
+    let cls = 'tree-link';
+    if(shown) cls += ' shown';
+    if(st.phase==='merge' && d===st.depth && lo===st.lo && hi===st.hi) cls += ' active';
+    if(st.phase==='done') cls += ' sorted';
+    el.className = cls;
+  });
+
+  const pointers = document.getElementById('mergePointers');
+  if(pointers){
+    if(st.phase==='merge'){
+      pointers.innerHTML = `
+        <span class="p lo">low <b>${st.lo}</b></span>
+        <span class="p mid">mid <b>${st.mid}</b></span>
+        <span class="p hi">high <b>${st.hi}</b></span>`;
+    } else {
+      pointers.innerHTML = `
+        <span class="p lo dim">low <b>—</b></span>
+        <span class="p mid dim">mid <b>—</b></span>
+        <span class="p hi dim">high <b>—</b></span>`;
+    }
+  }
+
+  const info = document.getElementById('mergeInfo');
+  if(info){
+    if(st.phase==='divide'){
+      if(st.rowsShown<=1) info.textContent = 'starting with the full, unsorted array';
+      else if(st.rowsShown>=mergeTreeRows.length) info.textContent = 'divided down to single elements — nothing left to split';
+      else info.textContent = 'splitting each group in half…';
+    } else if(st.phase==='merge'){
+      info.textContent = `merging the two halves → writing index ${st.k}`;
+    } else {
+      info.textContent = 'sorted';
+    }
+  }
+}
+
+function renderBinary(st){
+  stage.innerHTML = `<div>
+    <div style="text-align:center; margin-bottom:36px; color:var(--muted); font-size:0.8rem;">searching for <b style="color:var(--amber)">${st.target}</b></div>
+    <div class="arow" style="padding-top:62px;">${st.arr.map((v,i)=>{
+      let cls='cell';
+      if(i<st.lo || i>st.hi) cls+=' excluded';
+      if(i===st.mid) cls+=' mid';
+      if(st.found===i) cls+=' found';
+      // Each pointer that lands on this cell gets its own labeled 1cm arrow
+      // pointing straight down at the value; if more than one pointer lands
+      // on the same cell, their arrows sit side by side instead of overlapping.
+      const here = [];
+      if(i===st.lo) here.push({label:'LOW', cls:'ptr-lo'});
+      if(i===st.mid) here.push({label:'MID', cls:'ptr-mid'});
+      if(i===st.hi) here.push({label:'HIGH', cls:'ptr-hi'});
+      const n = here.length;
+      const markers = here.map((m,idx)=>{
+        const offset = (idx - (n-1)/2) * 22;
+        return `<div class="ptr-marker ${m.cls}" style="transform:translateX(calc(-50% + ${offset}px));">
+          <span class="ptr-label">${m.label}</span>
+          <span class="ptr-arrow-line"></span>
+        </div>`;
+      }).join('');
+      return `<div class="${cls}">${markers}${v}</div>`;
+    }).join('')}</div>
+    ${st.found>=0 ? `<div style="text-align:center;margin-top:20px;color:var(--green);font-size:0.85rem;">found at index ${st.found}</div>` : ''}
+    ${st.found===-1 && st.lo>st.hi ? `<div style="text-align:center;margin-top:20px;color:var(--red);font-size:0.85rem;">${st.target} is not in the array</div>` : ''}
+  </div>`;
+}
+
+function renderGraph(st){
+  const nodes = GRAPH_NODES.map(n=>{
+    let cls='node';
+    if(st.visited.includes(n.id)) cls+=' visited';
+    if(st.current===n.id) cls+=' current';
+    if(st.queue && st.queue.includes(n.id)) cls+=' queued';
+    return `<circle class="${cls}" cx="${n.x}" cy="${n.y}" r="20"></circle><text class="node-label" x="${n.x}" y="${n.y}">${n.label}</text>`;
+  }).join('');
+  const edges = GRAPH_EDGES.map(([a,b])=>{
+    const na=GRAPH_NODES[a], nb=GRAPH_NODES[b];
+    let cls='edge';
+    if(st.edge && ((st.edge[0]===a&&st.edge[1]===b)||(st.edge[0]===b&&st.edge[1]===a))) cls+=' active';
+    return `<line class="${cls}" x1="${na.x}" y1="${na.y}" x2="${nb.x}" y2="${nb.y}"></line>`;
+  }).join('');
+  stage.innerHTML = `<div style="width:100%;">
+    <svg viewBox="0 0 560 280">${edges}${nodes}</svg>
+    <div class="merge-info" style="margin-top:4px;">${st.caption||''}</div>
+  </div>`;
+}
+
+// ---------- CONTROLS ----------
+function play(){
+  if(stepIdx>=steps.length-1) return;
+  playing = true;
+  document.getElementById('pauseBtn').disabled = false;
+  clearTimeout(timer);
+  scheduleNext();
+}
+function scheduleNext(){
+  const baseDelay = 900 - speedEl.value*80;
+  const nextStep = steps[stepIdx+1];
+  const delay = nextStep && nextStep.phase==='divide' ? baseDelay*2.2 : baseDelay;
+  timer = setTimeout(()=>{
+    if(stepIdx < steps.length-1){
+      stepIdx++; render();
+      if(playing && stepIdx < steps.length-1) scheduleNext();
+      else pause();
+    }
+  }, delay);
+}
+function pause(){ playing=false; clearTimeout(timer); }
+function resetAll(){
+  pause(); barNodes = {};
+  if(current==='binary' && !customBinaryActive) binaryArray = null;
+  buildSteps(); stepIdx=0; render();
+  if(current==='binary'){ targetInput.value=''; updateRangeHint(); }
+}
+
+document.getElementById('playBtn').addEventListener('click', play);
+document.getElementById('pauseBtn').addEventListener('click', pause);
+document.getElementById('resetBtn').addEventListener('click', resetAll);
+speedEl.addEventListener('input', ()=>{ if(playing){ play(); } });
+
+function runCustomSearch(){
+  const val = Number(targetInput.value);
+  if(targetInput.value==='' || isNaN(val)) return;
+  pause();
+  steps = buildBinarySteps(val);
+  stepIdx = 0;
+  render();
+  updateRangeHint();
+  play();
+}
+document.getElementById('targetBtn').addEventListener('click', runCustomSearch);
+targetInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runCustomSearch(); });
+
+function runCustomArray(){
+  const n = parseInt(customCount.value, 10);
+  if(!n || n<2 || n>15){ statusEl.textContent = 'enter a count between 2 and 15'; return; }
+  const parts = customValues.value.split(/[\s,]+/).map(s=>s.trim()).filter(s=>s!=='');
+  if(parts.length !== n){ statusEl.textContent = `enter exactly ${n} values, separated by commas or spaces`; return; }
+  const nums = parts.map(Number);
+  if(nums.some(v=>isNaN(v) || v<=0)){ statusEl.textContent = 'values must be positive numbers'; return; }
+  pause();
+  if(current==='binary'){
+    binaryArray = nums.slice().sort((a,b)=>a-b);
+    customBinaryActive = true;
+    steps = buildBinarySteps();
+  } else {
+    customArr = nums;
+    buildSteps();
+  }
+  stepIdx = 0;
+  render();
+  if(current==='binary') updateRangeHint();
+}
+customBtn.addEventListener('click', runCustomArray);
+customValues.addEventListener('keydown', (e)=>{ if(e.key==='Enter') runCustomArray(); });
+
+function runFromStartNode(){
+  pause();
+  startNode = parseInt(startNodeSelect.value, 10) || 0;
+  buildSteps();
+  stepIdx = 0;
+  render();
+}
+startBtn.addEventListener('click', runFromStartNode);
+
+randomGraphBtn.addEventListener('click', ()=>{
+  pause();
+  generateRandomGraph();
+  startNode = 0;
+  refreshStartSelect();
+  buildSteps();
+  stepIdx = 0;
+  render();
+});
+
+// init
+renderAlgoList();
+selectAlgo('bubble');
+</script>
+</body>
+</html>
